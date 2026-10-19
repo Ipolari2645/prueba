@@ -37,25 +37,25 @@ Este diseño minimiza el tamaño de la cookie de sesión y el almacenamiento en 
 ### 2.2. Diagrama de Flujo del Motor de Carrito y Descuentos
 
 ```mermaid
-%%{init: {"theme":"base","themeVariables":{"fontFamily":"Arial, Helvetica, sans-serif","fontSize":"13px"},"flowchart":{"htmlLabels":true,"padding":12,"wrappingWidth":210,"nodeSpacing":35,"rankSpacing":45}}}%%
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"Arial, Helvetica, sans-serif","fontSize":"13px","lineColor":"#8b949e","arrowheadColor":"#8b949e","primaryColor":"#ffffff","primaryTextColor":"#1f2328","primaryBorderColor":"#8b949e","clusterBkg":"#f6f8fa","clusterBorder":"#8b949e","titleColor":"#1f2328","edgeLabelBackground":"#f6f8fa","tertiaryTextColor":"#1f2328"},"flowchart":{"htmlLabels":true,"padding":12,"wrappingWidth":210,"nodeSpacing":35,"rankSpacing":45}}}%%
 flowchart TD
-    subgraph S1["1. ALMACENAMIENTO EN SESIÓN"]
+    subgraph S1["1. Almacenamiento en Sesión"]
         SES["session('cart', [])"]
         OPS["Estructura: [ id_producto => cantidad ]<br/>add(), update(), remove(), clear(), count()"]
         SES --> OPS
     end
 
-    subgraph S2["2. HIDRATACIÓN DESDE BASE DE DATOS"]
+    subgraph S2["2. Hidratación desde Base de Datos"]
         DBQ["Producto::query()->whereIn('id_producto', $ids)->get()"]
         MAP["Mapeo a colección de items:<br/>• producto (Modelo Eloquent)<br/>• cantidad (int)<br/>• subtotal_linea = round(precio * cantidad, 2)"]
         DBQ --> MAP
     end
 
-    subgraph S3["3. CÁLCULO DE SUBTOTAL BRUTO"]
+    subgraph S3["3. Cálculo de Subtotal Bruto"]
         SUB["subtotal = round(Σ subtotal_lineas, 2)"]
     end
 
-    subgraph S4["4. MOTOR DE DESCUENTOS B2B"]
+    subgraph S4["4. Motor de Descuentos B2B"]
         direction TB
         D1{"¿$cliente === null?"}
         D2["Consultar<br/>$cliente->descuentosVigentes()"]
@@ -77,7 +77,7 @@ flowchart TD
         D5 -->|monto_fijo| F_FIJO --> CAP
     end
 
-    subgraph S5["5. TOTAL NETO DEFINITIVO"]
+    subgraph S5["5. Total Neto Definitivo"]
         TOT["total(?Cliente $cliente) =<br/>round(subtotal - descuento, 2)"]
     end
 
@@ -170,15 +170,14 @@ El proceso de checkout y confirmación de pedidos es una operación de alta crit
 ### 3.2. Diagrama de Flujo Transaccional
 
 ```mermaid
-%%{init: {"theme":"base","themeVariables":{"fontFamily":"Arial, Helvetica, sans-serif","fontSize":"13px"},"flowchart":{"htmlLabels":true,"padding":12,"wrappingWidth":230,"nodeSpacing":35,"rankSpacing":45}}}%%
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"Arial, Helvetica, sans-serif","fontSize":"13px","lineColor":"#8b949e","arrowheadColor":"#8b949e","primaryColor":"#ffffff","primaryTextColor":"#1f2328","primaryBorderColor":"#8b949e","clusterBkg":"#f6f8fa","clusterBorder":"#8b949e","titleColor":"#1f2328","edgeLabelBackground":"#f6f8fa","tertiaryTextColor":"#1f2328"},"flowchart":{"htmlLabels":true,"padding":12,"wrappingWidth":230,"nodeSpacing":35,"rankSpacing":45}}}%%
 flowchart TD
     START(["Llamada a Cart::confirmar()<br/>Inicia proceso de checkout"]) --> OS_CALL
 
     subgraph TX["Transacción Atómica (OrderService::crear en DB::transaction)"]
-        direction TB
         OS_CALL["1. OrderService::crear($cliente, $items, $obs)"]
         
-        T1["2. Cálculo de Montos Financieros<br/>• $subtotal = $cart->subtotal()<br/>• $descuento = $cart->descuento($cliente)<br/>• $total_neto = round($subtotal - $descuento, 2)"]
+        T1["2. Cálculo de Montos Financieros<br/>• $subtotal = round(array_sum(array_column($items, 'subtotal')), 2)<br/>• $descuento = $this->cart->descuento($cliente)<br/>• $total_neto = round($subtotal - $descuento, 2)"]
         
         T2["3. Bloqueo Consultivo PostgreSQL<br/>SELECT pg_advisory_xact_lock(20261006)<br/>Serializa correlativo anual sin colisiones"]
         
@@ -194,7 +193,6 @@ flowchart TD
     end
 
     subgraph POST_TX["Post-Transacción en Servidor (Cart::confirmar)"]
-        direction TB
         P1["8. Despacho Asíncrono de Correos<br/>• PedidoCliente (al comprador, ShouldQueue)<br/>• PedidoOperativo (a ventas, ShouldQueue)"]
         P2["9. Vaciado de Carrito en Sesión<br/>CartService::clear()"]
         P3["10. Redirección Reactiva SPA<br/>redirectRoute('pedido.show')"]

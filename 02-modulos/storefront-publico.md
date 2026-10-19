@@ -73,9 +73,9 @@ La capa de presentación frontal se estructura en:
 ## 3. Catálogo de Componentes Livewire Públicos
 
 ```mermaid
-%%{init: {"theme":"base","themeVariables":{"fontFamily":"Arial, Helvetica, sans-serif","fontSize":"13px"},"flowchart":{"htmlLabels":true,"padding":12,"wrappingWidth":210,"nodeSpacing":35,"rankSpacing":45}}}%%
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"Arial, Helvetica, sans-serif","fontSize":"13px","lineColor":"#8b949e","arrowheadColor":"#8b949e","primaryColor":"#ffffff","primaryTextColor":"#1f2328","primaryBorderColor":"#8b949e","clusterBkg":"#f6f8fa","clusterBorder":"#8b949e","titleColor":"#1f2328","edgeLabelBackground":"#f6f8fa","tertiaryTextColor":"#1f2328"},"flowchart":{"htmlLabels":true,"padding":12,"wrappingWidth":210,"nodeSpacing":35,"rankSpacing":45}}}%%
 flowchart TD
-    subgraph SF["STOREFRONT REACTIVO (LIVEWIRE 4)"]
+    subgraph SF["Storefront Reactivo (Livewire 4)"]
         direction TB
         
         subgraph CATALOGO["Navegación y Compra"]
@@ -100,7 +100,7 @@ flowchart TD
 
 #### Diagrama de Secuencia de Reactividad y Eventos
 ```mermaid
-%%{init: {"theme":"base","themeVariables":{"fontSize":"13px"}}}%%
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"Arial, Helvetica, sans-serif","fontSize":"13px","actorBkg":"#ffffff","actorBorder":"#8b949e","actorTextColor":"#1f2328","actorLineColor":"#8b949e","signalColor":"#8b949e","signalTextColor":"#73767a","labelBoxBkgColor":"#f6f8fa","labelBoxBorderColor":"#8b949e","labelTextColor":"#1f2328","loopTextColor":"#8b949e","noteBkgColor":"#f6f8fa","noteTextColor":"#1f2328","noteBorderColor":"#8b949e","activationBorderColor":"#8b949e","activationBkgColor":"#f6f8fa","sequenceNumberColor":"#ffffff"}}}%%
 sequenceDiagram
     autonumber
     actor U as Usuario / Comprador
