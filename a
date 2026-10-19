@@ -1,0 +1,62 @@
+---
+titulo: "Módulo de Autenticación, 2FA y Passkeys (Fortify)"
+tipo: modulo
+estado: vigente
+autor: "Tu Nombre Real"
+fecha: "2026-10-19"
+commit_auditado: "bd451e2"
+alcance:
+  - app/Actions/Fortify/CreateNewUser.php
+  - app/Actions/Fortify/PasswordValidationRules.php
+  - app/Actions/Fortify/ResetUserPassword.php
+  - app/Actions/Fortify/UpdateUserPassword.php
+  - app/Actions/Fortify/UpdateUserProfileInformation.php
+  - app/Providers/FortifyServiceProvider.php
+  - config/fortify.php
+  - resources/views/auth/
+requisitos:
+  - RF-SEG-01
+  - RF-SEG-02
+  - RF-SEG-03
+---
+
+## 1. Resumen y propósito de negocio
+
+Este módulo implementa el registro de clientes B2B/B2C, inicio de sesión tradicional, segundo factor TOTP (2FA), llaves biométricas WebAuthn (Passkeys) y recuperación de contraseñas mediante Laravel Fortify (`config/fortify.php:1-160`) y las acciones en `app/Actions/Fortify/`.
+
+## 2. Requisitos que implementa
+
+| Código | Descripción | Cita en código |
+|---|---|---|
+| `RF-SEG-01` | Registro atómico de usuario cliente y consentimiento de datos Ley 29733 | `app/Actions/Fortify/CreateNewUser.php:23-78` |
+| `RF-SEG-02` | Autenticación con Rate Limiting, 2FA y Passkeys | `app/Providers/FortifyServiceProvider.php:28-95` |
+| `RF-SEG-03` | Recuperación y cambio de contraseña con reglas de complejidad | `app/Actions/Fortify/ResetUserPassword.php:17-32`, `app/Actions/Fortify/UpdateUserPassword.php:19-38` |
+
+## 3. Rutas y puntos de entrada
+
+| Método | URI | Nombre | Acción / Vista | Middleware |
+|---|---|---|---|---|
+| `GET` | `/login` | `login` | `resources/views/auth/login.blade.php` | `web`, `guest` |
+| `POST` | `/login` | `login.store` | `AuthenticatedSessionController::store` | `web`, `guest`, `throttle:login` |
+| `POST` | `/logout` | `logout` | `AuthenticatedSessionController::destroy` | `web`, `auth` |
+| `GET` | `/register` | `register` | `resources/views/auth/register.blade.php` | `web`, `guest` |
+| `POST` | `/register` | `register.store` | `App\Actions\Fortify\CreateNewUser::create` | `web`, `guest` |
+| `GET` | `/forgot-password` | `password.request` | `resources/views/auth/forgot-password.blade.php` | `web`, `guest` |
+| `POST` | `/forgot-password` | `password.email` | `PasswordResetLinkController::store` | `web`, `guest` |
+| `GET` | `/reset-password/{token}` | `password.reset` | `resources/views/auth/reset-password.blade.php` | `web`, `guest` |
+| `POST` | `/reset-password` | `password.update` | `App\Actions\Fortify\ResetUserPassword::reset` | `web`, `guest` |
+
+## 4. Diagrama de flujo
+
+```mermaid
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"Arial, Helvetica, sans-serif","fontSize":"13px","lineColor":"#8b949e","arrowheadColor":"#8b949e","primaryColor":"#ffffff","primaryTextColor":"#1f2328","primaryBorderColor":"#8b949e","clusterBkg":"#f6f8fa","clusterBorder":"#8b949e","titleColor":"#1f2328","edgeLabelBackground":"#f6f8fa"},"flowchart":{"htmlLabels":true,"padding":12,"wrappingWidth":210,"nodeSpacing":35,"rankSpacing":45}}}%%
+flowchart TD
+    A[Solicitud de Usuario] --> B{Flujo Solicitado}
+    B -->|POST /register| C[CreateNewUser::create]
+    C --> D[Validar DNI/RUC, email y passwordRules]
+    D --> E[DB::transaction: User + Cliente + ConsentimientoDato]
+    B -->|POST /login| F[FortifyServiceProvider RateLimiter]
+    F --> G{Credenciales y user.estado}
+    G -->|Fallo| H[Throttle 5 intentos por minuto]
+    G -->|Exito| I[Verificar 2FA TOTP o Passkey]
+    I --> J[Sesion Autenticada]
