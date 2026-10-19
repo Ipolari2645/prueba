@@ -13,16 +13,16 @@ La arquitectura de **Filam Centroplas** sigue un enfoque **Híbrido MVC Clásico
 ### 1.1. Topología del Sistema (Flujo en Capas)
 
 ```mermaid
-%%{init: {"theme":"base","themeVariables":{"fontFamily":"Arial, Helvetica, sans-serif","fontSize":"13px"},"flowchart":{"htmlLabels":true,"padding":12,"wrappingWidth":220,"nodeSpacing":35,"rankSpacing":45}}}%%
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"Arial, Helvetica, sans-serif","fontSize":"13px","lineColor":"#8b949e","arrowheadColor":"#8b949e","primaryColor":"#ffffff","primaryTextColor":"#1f2328","primaryBorderColor":"#8b949e","clusterBkg":"#f6f8fa","clusterBorder":"#8b949e","titleColor":"#1f2328","edgeLabelBackground":"#f6f8fa","tertiaryTextColor":"#1f2328"},"flowchart":{"htmlLabels":true,"padding":12,"wrappingWidth":210,"nodeSpacing":35,"rankSpacing":45}}}%%
 flowchart TD
-    subgraph L1["1. ACTORES Y CLIENTES"]
+    subgraph L1["1. ACTORES Y CLIENTES&nbsp;&nbsp;&nbsp;"]
         U_ANON["Visitante Anónimo"]
         U_CLI["Cliente B2B / B2C"]
         U_OP["Operador de Ventas"]
         U_ADM["Administrador"]
     end
 
-    subgraph L2["2. PERÍMETRO, SEGURIDAD Y ROUTING"]
+    subgraph L2["2. PERÍMETRO Y ROUTING&nbsp;&nbsp;&nbsp;"]
         direction TB
         NGINX["Servidor Web (Nginx / Caddy)<br/><i>(Supuesto de Despliegue)</i>"]
         SEC_H["SecurityHeaders Middleware<br/>(XFO, nosniff, Referrer, HSTS)"]
@@ -31,7 +31,7 @@ flowchart TD
         NGINX --> SEC_H --> FORT_RL --> ROUTES
     end
 
-    subgraph L3["3. CAPA DE PRESENTACIÓN"]
+    subgraph L3["3. PRESENTACIÓN&nbsp;&nbsp;&nbsp;"]
         subgraph L3A["Controladores HTTP Clásicos"]
             HC["HomeController<br/>(Portal Inicio)"]
             PC["ProductoController<br/>(Ficha Técnica)"]
@@ -43,13 +43,13 @@ flowchart TD
         end
     end
 
-    subgraph L4["4. SERVICIOS DE DOMINIO Y AUTORIZACIÓN"]
+    subgraph L4["4. DOMINIO Y SERVICIOS&nbsp;&nbsp;&nbsp;"]
         CS["CartService<br/>(Sesión, Subtotales,<br/>Reglas de Descuento)"]
         OS["OrderService<br/>(pg_advisory_xact_lock,<br/>Correlativo, Congelamiento)"]
         AUD_POL["AuditoriaService y Policies<br/>(Bitácora Forense,<br/>RBAC en Servidor)"]
     end
 
-    subgraph L5["5. PERSISTENCIA Y RECURSOS"]
+    subgraph L5["5. PERSISTENCIA Y RECURSOS&nbsp;&nbsp;&nbsp;"]
         PG[("PostgreSQL 16+<br/>• citext, timestamptz<br/>• SoftDeletes, CHECKs<br/>• Advisory Locks")]
         HORIZON["Redis + Horizon<br/>(Colas Asíncronas<br/>ShouldQueue Mailables)"]
         STOR["Disco Local / Público<br/>(Imágenes y Catálogo)"]
@@ -177,7 +177,7 @@ Todos los componentes administrativos están protegidos por middleware `auth` y 
 El ciclo de vida del pedido en `PedidoDetalle.php` se implementa como una máquina de estados finita con transiciones estrictamente validadas en el servidor:
 
 ```mermaid
-%%{init: {"theme":"base","themeVariables":{"fontSize":"13px"}}}%%
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"Arial, Helvetica, sans-serif","fontSize":"13px","lineColor":"#8b949e","arrowheadColor":"#8b949e","transitionColor":"#8b949e","transitionLabelColor":"#1f2328","stateBkg":"#ffffff","stateBorder":"#8b949e","stateLabelColor":"#1f2328","labelColor":"#1f2328","textColor":"#1f2328","edgeLabelBackground":"#f6f8fa"}}}%%
 stateDiagram-v2
     [*] --> pendiente : confirmar_pedido
     
@@ -288,6 +288,7 @@ La capa de servicios aísla la lógica de negocio crítica de las vistas y compo
 El modelo de control de acceso basado en roles (**RBAC**) se ejecuta estrictamente en el servidor:
 
 ```mermaid
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"Arial, Helvetica, sans-serif","fontSize":"13px","lineColor":"#8b949e","primaryColor":"#ffffff","primaryTextColor":"#1f2328","primaryBorderColor":"#8b949e","classText":"#1f2328"}}}%%
 classDiagram
     class User {
         +int id
@@ -389,10 +390,14 @@ Configura el backend de autenticación desacoplado de Fortify:
 
 ### 3.4. `HorizonServiceProvider` (`app/Providers/HorizonServiceProvider.php`)
 - Extiende de `HorizonApplicationServiceProvider` para supervisar el orquestador de colas Redis (`QUEUE_CONNECTION=redis`).
-- **Gate de Seguridad `viewHorizon` (`app/Providers/HorizonServiceProvider.php:21`):**
+- **Gate de Seguridad `viewHorizon` (`app/Providers/HorizonServiceProvider.php:31`):**
   ```php
-  Gate::define('viewHorizon', function ($user = null) {
-      return app()->environment('local') || ($user && $user->isAdministrador());
+  Gate::define('viewHorizon', function (?User $user = null) {
+      if (app()->environment('local')) {
+          return true;
+      }
+
+      return (bool) $user?->isAdministrador();
   });
   ```
   - En entorno `local`: Permite acceso irrestricto (incluso con `$user = null`, es decir, peticiones anónimas) para facilitar el monitoreo en desarrollo.

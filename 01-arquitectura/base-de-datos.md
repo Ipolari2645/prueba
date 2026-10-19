@@ -45,11 +45,12 @@ Abarca la autenticación de usuarios (Laravel Fortify con 2FA y Passkeys), roles
 
 #### Diagrama Estructural de Relaciones (Subdominio 1)
 ```mermaid
-%%{init: {"theme":"base","themeVariables":{"fontSize":"12px"}}}%%
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"Arial, Helvetica, sans-serif","fontSize":"12px","lineColor":"#8b949e","primaryColor":"#ffffff","primaryTextColor":"#1f2328","primaryBorderColor":"#8b949e","textColor":"#1f2328","edgeLabelBackground":"#f6f8fa"}}}%%
 erDiagram
     roles ||--o{ users : "asigna rol a"
     users ||--o{ passkeys : "autentica con"
     users ||--o{ solicitudes_stock : "atiende como operador"
+    clientes ||--o{ solicitudes_stock : "solicita"
     categorias ||--o{ producto_categoria : "clasifica"
     productos ||--o{ producto_categoria : "pertenece a"
     productos ||--o{ imagenes_producto : "tiene"
@@ -59,6 +60,7 @@ erDiagram
         int id_rol PK "Identificador único de rol"
         string nombre_rol UK "Administrador u Operador"
         string descripcion "Detalle del alcance del rol"
+        boolean estado "Estado activo default true"
         timestamp created_at "timestamptz creación"
         timestamp updated_at "timestamptz edición"
     }
@@ -158,7 +160,7 @@ Abarca el núcleo comercial: perfiles de facturación DNI/RUC, motor de descuent
 
 #### Diagrama Estructural de Relaciones (Subdominio 2)
 ```mermaid
-%%{init: {"theme":"base","themeVariables":{"fontSize":"12px"}}}%%
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"Arial, Helvetica, sans-serif","fontSize":"12px","lineColor":"#8b949e","primaryColor":"#ffffff","primaryTextColor":"#1f2328","primaryBorderColor":"#8b949e","textColor":"#1f2328","edgeLabelBackground":"#f6f8fa"}}}%%
 erDiagram
     users ||--o| clientes : "asocia cuenta"
     clientes ||--o{ cliente_descuento : "recibe asignación"
@@ -238,8 +240,6 @@ erDiagram
         string numero_comprobante UK "Formato CI-AAAA-NNNNN"
         string leyenda_legal "DOCUMENTO DE CONTROL INTERNO"
         timestamp fecha_emision "timestamptz de expedición"
-        timestamp created_at "timestamptz creación"
-        timestamp updated_at "timestamptz edición"
     }
 
     historial_estados_pedido {
@@ -259,10 +259,10 @@ Modela el Libro de Reclamaciones formal con plazo de 15 días hábiles, registro
 
 #### Diagrama Estructural de Relaciones (Subdominio 3)
 ```mermaid
-%%{init: {"theme":"base","themeVariables":{"fontSize":"12px"}}}%%
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"Arial, Helvetica, sans-serif","fontSize":"12px","lineColor":"#8b949e","primaryColor":"#ffffff","primaryTextColor":"#1f2328","primaryBorderColor":"#8b949e","textColor":"#1f2328","edgeLabelBackground":"#f6f8fa"}}}%%
 erDiagram
     clientes ||--o{ consentimientos_datos : "otorga"
-    consentimientos_datos ||--o| mensajes_contacto : "vincula consentimiento"
+    consentimientos_datos ||--o{ mensajes_contacto : "vincula consentimiento"
     users ||--o{ reclamaciones : "atiende como operador"
     users ||--o{ registro_auditoria : "ejecuta acción"
     users ||--o{ banners : "publica"
