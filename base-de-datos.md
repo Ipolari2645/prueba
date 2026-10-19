@@ -34,294 +34,302 @@ La capa de datos está construida sobre **PostgreSQL**, utilizando característi
 
 ---
 
-## 2. Diagrama Entidad-Relación Completo (`erDiagram`)
+## 2. Diagramas Entidad-Relación por Subdominio
 
-El siguiente diagrama modela las **20 entidades de negocio** más la tabla de autenticación biométrica WebAuthn (`passkeys`), mostrando sus atributos, tipos de datos PostgreSQL, claves primarias (`PK`), claves foráneas (`FK`) y cardinalidades exactas:
+Para garantizar una lectura limpia, libre de cruces de líneas o marañas visuales, el modelo relacional de **20 entidades de negocio** más la tabla de autenticación WebAuthn (`passkeys`) se organiza en **3 subdominios funcionales desacoplados**:
 
+---
+
+### 2.1. Subdominio 1: Usuarios, Seguridad, Catálogo y Stock
+Abarca la autenticación de usuarios (Laravel Fortify con 2FA y Passkeys), roles internos (`Administrador`, `Operador`), taxonomía de categorías, catálogo con imágenes y captura de solicitudes de stock agotado.
+
+#### Diagrama Estructural de Relaciones (Subdominio 1)
 ```mermaid
 erDiagram
-    ROLES ||--o{ USERS : "asigna rol a"
-    USERS ||--o| CLIENTES : "posee perfil comercial"
-    USERS ||--o{ PASSKEYS : "registra llaves webauthn"
-    USERS ||--o{ HISTORIAL_ESTADOS_PEDIDO : "registra operador"
-    USERS ||--o{ REGISTRO_AUDITORIA : "origina eventos"
-    USERS ||--o{ BANNERS : "publica banner"
-    USERS ||--o{ CONTENIDO_INSTITUCIONAL : "edita contenido"
-    USERS ||--o{ SOLICITUDES_STOCK : "asigna operador"
-    USERS ||--o{ RECLAMACIONES : "atiende reclamo"
+    roles ||--o{ users : "asigna rol a"
+    users ||--o{ passkeys : "autentica con"
+    categorias ||--o{ producto_categoria : "clasifica"
+    productos ||--o{ producto_categoria : "pertenece a"
+    productos ||--o{ imagenes_producto : "tiene"
+    productos ||--o{ solicitudes_stock : "recibe solicitudes"
 
-    CLIENTES ||--o{ PEDIDOS : "emite pedido"
-    CLIENTES ||--o{ CLIENTE_DESCUENTO : "recibe descuento"
-    CLIENTES ||--o{ SOLICITUDES_STOCK : "solicita opcional"
-    CLIENTES ||--o{ CONSENTIMIENTOS_DATOS : "otorga consentimiento"
-
-    POLITICAS_DESCUENTO ||--o{ CLIENTE_DESCUENTO : "establece regla"
-
-    CATEGORIAS ||--o{ PRODUCTO_CATEGORIA : "clasifica"
-    PRODUCTOS ||--o{ PRODUCTO_CATEGORIA : "pertenece a"
-    PRODUCTOS ||--o{ IMAGENES_PRODUCTO : "posee galeria"
-    PRODUCTOS ||--o{ DETALLE_PEDIDOS : "se congela en"
-    PRODUCTOS ||--o{ SOLICITUDES_STOCK : "demanda stock"
-
-    PEDIDOS ||--|{ DETALLE_PEDIDOS : "contiene items"
-    PEDIDOS ||--|{ HISTORIAL_ESTADOS_PEDIDO : "registra ciclo"
-    PEDIDOS ||--|| COMPROBANTES_INTERNOS : "emite 1 a 1"
-
-    CONSENTIMIENTOS_DATOS ||--o| MENSAJES_CONTACTO : "autoriza datos"
-
-    ROLES {
-        bigint id_rol PK
-        string nombre_rol
-        string descripcion
-        boolean estado
-        timestamptz created_at
-        timestamptz updated_at
+    roles {
+        int id_rol PK "Identificador único de rol"
+        string nombre_rol UK "Administrador u Operador"
+        boolean estado "Activo / Inactivo"
+        timestamp created_at "timestamptz creación"
+        timestamp updated_at "timestamptz edición"
     }
 
-    USERS {
-        bigint id PK
-        string name
-        citext email UK
-        timestamptz email_verified_at
-        string password
-        text two_factor_secret
-        text two_factor_recovery_codes
-        timestamptz two_factor_confirmed_at
-        bigint id_rol FK
-        timestamptz last_login_at
-        timestamptz created_at
-        timestamptz updated_at
-        timestamptz deleted_at
+    users {
+        int id PK "Identificador único de usuario"
+        int id_rol FK "Llave foránea hacia roles"
+        string name "Nombre visible"
+        string email UK "Correo único insensible citext"
+        timestamp email_verified_at "Fecha verificación"
+        string password "Hash Bcrypt"
+        text two_factor_secret "Clave secreta 2FA Fortify"
+        timestamp created_at "timestamptz creación"
+        timestamp updated_at "timestamptz edición"
+        timestamp deleted_at "timestamptz SoftDelete"
     }
 
-    PASSKEYS {
-        bigint id PK
-        bigint user_id FK
-        string name
-        string credential_id UK
-        json credential
-        timestamptz last_used_at
-        timestamptz created_at
-        timestamptz updated_at
+    passkeys {
+        int id PK "Identificador de credencial"
+        int user_id FK "Llave foránea hacia users"
+        string name "Nombre amigable de passkey"
+        string credential_id UK "ID WebAuthn único"
+        text data "Metadatos y llave pública JSON"
+        timestamp created_at "timestamptz registro"
+        timestamp updated_at "timestamptz actualización"
     }
 
-    CLIENTES {
-        bigint id_cliente PK
-        bigint id_user FK
-        string tipo_documento
-        string numero_documento UK
-        string razon_social
-        string telefono
-        string direccion
-        boolean estado
-        timestamptz created_at
-        timestamptz updated_at
-        timestamptz deleted_at
+    categorias {
+        int id_categoria PK "Identificador de categoría"
+        string nombre "Nombre comercial familia"
+        string slug UK "Slug único URL"
+        text descripcion "Descripción técnica"
+        int orden "Secuencia de visualización"
+        boolean activo "Flag activo"
+        timestamp created_at "timestamptz creación"
+        timestamp updated_at "timestamptz edición"
+        timestamp deleted_at "timestamptz SoftDelete"
     }
 
-    POLITICAS_DESCUENTO {
-        bigint id_politica PK
-        string nombre
-        string tipo_descuento
-        decimal valor
-        decimal monto_minimo
-        boolean activo
-        timestamptz created_at
-        timestamptz updated_at
+    productos {
+        int id_producto PK "Identificador de producto"
+        string codigo_sku UK "Código de inventario único"
+        string nombre "Nombre oficial"
+        string slug UK "Slug único URL"
+        text descripcion "Ficha técnica extendida"
+        decimal precio_base "Precio base en soles CHECK >= 0"
+        string stock_estado "CHECK: disponible, stock_bajo, agotado"
+        boolean activo "Flag visibilidad pública"
+        timestamp created_at "timestamptz creación"
+        timestamp updated_at "timestamptz edición"
+        timestamp deleted_at "timestamptz SoftDelete"
     }
 
-    CLIENTE_DESCUENTO {
-        bigint id_cliente_descuento PK
-        bigint id_cliente FK
-        bigint id_politica FK
-        date fecha_inicio
-        date fecha_fin
-        boolean activo
-        timestamptz created_at
-        timestamptz updated_at
+    producto_categoria {
+        int id_producto PK, FK "Llave foránea hacia productos"
+        int id_categoria PK, FK "Llave foránea hacia categorias"
     }
 
-    CATEGORIAS {
-        bigint id_categoria PK
-        string nombre
-        string slug UK
-        text descripcion
-        integer orden
-        boolean activo
-        timestamptz created_at
-        timestamptz updated_at
-        timestamptz deleted_at
+    imagenes_producto {
+        int id_imagen PK "Identificador de imagen"
+        int id_producto FK "Llave foránea hacia productos"
+        string url_imagen "Ruta storage público"
+        boolean es_portada "Indica imagen principal"
+        int orden "Orden en carrusel"
+        timestamp created_at "timestamptz creación"
+        timestamp updated_at "timestamptz edición"
     }
 
-    PRODUCTOS {
-        bigint id_producto PK
-        string codigo_sku UK
-        string nombre
-        string slug UK
-        string descripcion_corta
-        text descripcion_larga
-        decimal precio_base
-        string stock_estado
-        boolean destacado
-        integer orden
-        boolean activo
-        timestamptz created_at
-        timestamptz updated_at
-        timestamptz deleted_at
+    solicitudes_stock {
+        int id_solicitud PK "Identificador de solicitud"
+        int id_producto FK "Llave foránea hacia productos"
+        string nombre_contacto "Nombre del interesado"
+        string email "Correo de respuesta"
+        string telefono "Teléfono de contacto"
+        int cantidad_referencial "Cantidad solicitada"
+        string estado "CHECK: pendiente, en_atencion, atendida"
+        timestamp created_at "timestamptz creación"
+        timestamp updated_at "timestamptz edición"
+    }
+```
+
+---
+
+### 2.2. Subdominio 2: Clientes, Descuentos B2B, Pedidos y Comprobantes
+Abarca el núcleo comercial: perfiles de facturación DNI/RUC, motor de descuentos preferenciales mayoristas, pedidos con congelamiento de precios/nombres y comprobantes internos 1 a 1.
+
+#### Diagrama Estructural de Relaciones (Subdominio 2)
+```mermaid
+erDiagram
+    users ||--o| clientes : "asocia cuenta"
+    clientes ||--o{ cliente_descuentos : "recibe asignación"
+    politicas_descuento ||--o{ cliente_descuentos : "define regla"
+    clientes ||--o{ pedidos : "genera"
+    pedidos ||--o{ detalle_pedidos : "contiene líneas"
+    productos ||--o{ detalle_pedidos : "referencia catálogo"
+    pedidos ||--o{ historial_estados_pedido : "registra ciclo"
+    users ||--o{ historial_estados_pedido : "operador asignado"
+    pedidos ||--|| comprobantes_internos : "emite 1 a 1"
+
+    politicas_descuento {
+        int id_politica PK "Identificador de política"
+        string nombre "Nombre de la regla comercial"
+        string tipo_descuento "CHECK: porcentaje o monto_fijo"
+        decimal valor "Magnitud del descuento"
+        decimal monto_minimo "Umbral mínimo de subtotal"
+        boolean activo "Flag de vigencia"
+        timestamp created_at "timestamptz creación"
+        timestamp updated_at "timestamptz edición"
     }
 
-    PRODUCTO_CATEGORIA {
-        bigint id_producto PK, FK
-        bigint id_categoria PK, FK
+    clientes {
+        int id_cliente PK "Identificador de cliente"
+        int id_user FK "Llave foránea users opcional"
+        string tipo_documento "CHECK: DNI o RUC"
+        string numero_documento UK "Número de documento tributario"
+        string razon_social "Razón social o nombres"
+        string direccion "Dirección fiscal o entrega"
+        string telefono "Teléfono de contacto"
+        boolean activo "Flag cliente activo"
+        timestamp created_at "timestamptz creación"
+        timestamp updated_at "timestamptz edición"
+        timestamp deleted_at "timestamptz SoftDelete"
     }
 
-    IMAGENES_PRODUCTO {
-        bigint id_imagen PK
-        bigint id_producto FK
-        string url_imagen
-        integer orden
-        boolean es_portada
-        timestamptz created_at
-        timestamptz updated_at
+    cliente_descuentos {
+        int id_cliente_descuento PK "Identificador asignación"
+        int id_cliente FK "Llave foránea hacia clientes"
+        int id_politica FK "Llave foránea hacia politicas_descuento"
+        date fecha_inicio "Inicio vigencia"
+        date fecha_fin "Fin vigencia opcional"
+        boolean activo "Flag activo"
+        timestamp created_at "timestamptz creación"
+        timestamp updated_at "timestamptz edición"
     }
 
-    PEDIDOS {
-        bigint id_pedido PK
-        string codigo_correlativo UK
-        bigint id_cliente FK
-        decimal subtotal
-        decimal descuento_total
-        decimal total_neto
-        string estado_actual
-        timestamptz fecha_emision
-        text observaciones_entrega
-        timestamptz created_at
-        timestamptz updated_at
+    pedidos {
+        int id_pedido PK "Identificador de pedido"
+        int id_cliente FK "Llave foránea hacia clientes"
+        string codigo_correlativo UK "Formato PED-AAAA-NNNNN"
+        string estado_actual "CHECK: pendiente, revision, etc"
+        decimal subtotal "Suma de líneas redondeada"
+        decimal descuento "Monto descontado aplicado"
+        decimal total "Monto neto a pagar"
+        text observaciones_entrega "Indicaciones de obra"
+        timestamp fecha_emision "timestamptz emisión"
+        timestamp created_at "timestamptz creación"
+        timestamp updated_at "timestamptz edición"
     }
 
-    DETALLE_PEDIDOS {
-        bigint id_detalle PK
-        bigint id_pedido FK
-        bigint id_producto FK
-        integer cantidad
-        string nombre_comercial_congelado
-        decimal precio_unitario_congelado
-        decimal subtotal_linea
-        timestamptz created_at
-        timestamptz updated_at
+    detalle_pedidos {
+        int id_detalle PK "Identificador de detalle"
+        int id_pedido FK "Llave foránea hacia pedidos"
+        int id_producto FK "Llave foránea hacia productos"
+        string nombre_comercial_congelado "Nombre inmutable"
+        string sku_congelado "SKU inmutable"
+        decimal precio_unitario_congelado "Precio congelado"
+        int cantidad "Unidades solicitadas"
+        decimal subtotal_linea "Importe de la línea"
+        timestamp created_at "timestamptz creación"
+        timestamp updated_at "timestamptz edición"
     }
 
-    HISTORIAL_ESTADOS_PEDIDO {
-        bigint id_historial PK
-        bigint id_pedido FK
-        string estado
-        bigint id_usuario_operador FK
-        text notas_bitacora
-        timestamptz fecha_cambio
+    comprobantes_internos {
+        int id_comprobante PK "Identificador comprobante"
+        int id_pedido UK, FK "Relación 1 a 1 única con pedido"
+        string serie "Serie interna NP01"
+        string numero_comprobante UK "Formato CI-AAAA-NNNNN"
+        string tipo_documento "nota_pedido"
+        string estado "CHECK: emitido, anulado"
+        decimal total "Total concordante con pedido"
+        string leyenda_legal "NO VALIDO COMO COMPROBANTE TRIBUTARIO"
+        timestamp created_at "timestamptz creación"
+        timestamp updated_at "timestamptz edición"
     }
 
-    COMPROBANTES_INTERNOS {
-        bigint id_comprobante PK
-        bigint id_pedido UK, FK
-        string numero_comprobante UK
-        timestamptz fecha_emision
-        string leyenda_legal
+    historial_estados_pedido {
+        int id_historial PK "Identificador de transición"
+        int id_pedido FK "Llave foránea hacia pedidos"
+        int id_usuario_operador FK "Operador responsable"
+        string estado_anterior "Estado origen"
+        string estado_nuevo "Estado destino"
+        text nota_cambio "Justificación operativa"
+        timestamp fecha_cambio "timestamptz de transición"
+    }
+```
+
+---
+
+### 2.3. Subdominio 3: Cumplimiento Legal (Ley 29733 / 29571), CMS y Auditoría
+Modela el Libro de Reclamaciones formal con plazo de 15 días hábiles, registro inmutable de consentimientos de privacidad, formulario de contacto, banners y bitácora forense de auditoría.
+
+#### Diagrama Estructural de Relaciones (Subdominio 3)
+```mermaid
+erDiagram
+    clientes ||--o{ consentimientos_datos : "otorga"
+    consentimientos_datos ||--o| mensajes_contacto : "vincula consentimiento"
+    users ||--o{ reclamaciones : "atiende como operador"
+    users ||--o{ registro_auditoria : "ejecuta acción"
+
+    consentimientos_datos {
+        int id_consentimiento PK "Identificador consentimiento"
+        int id_cliente FK "Cliente opcional SET NULL"
+        string finalidad "CHECK: registro, contacto, reclamo"
+        string version_politica "Versión de términos v1.0"
+        boolean aceptado "Flag booleano"
+        timestamp aceptado_en "timestamptz de firma"
+        string direccion_ip "IP de origen auditoría"
+        text user_agent "Navegador y plataforma"
+        timestamp created_at "timestamptz creación"
+        timestamp updated_at "timestamptz edición"
     }
 
-    SOLICITUDES_STOCK {
-        bigint id_solicitud PK
-        bigint id_producto FK
-        bigint id_cliente FK
-        string nombres_contacto
-        string correo
-        string telefono
-        integer cantidad_requerida
-        string estado
-        bigint id_usuario_asignado FK
-        text notas_seguimiento
-        timestamptz created_at
-        timestamptz updated_at
+    mensajes_contacto {
+        int id_mensaje PK "Identificador mensaje"
+        int id_consentimiento FK "Consentimiento asociado"
+        string nombre "Remitente"
+        string correo "Correo electrónico"
+        string telefono "Teléfono de contacto"
+        string asunto "Tema del mensaje"
+        text mensaje "Cuerpo de consulta"
+        timestamp fecha_envio "timestamptz de recepción"
+        timestamp created_at "timestamptz creación"
+        timestamp updated_at "timestamptz edición"
     }
 
-    RECLAMACIONES {
-        bigint id_reclamacion PK
-        string codigo_correlativo UK
-        string nombre_consumidor
-        string tipo_documento
-        string numero_documento
-        string correo
-        string telefono
-        string domicilio
-        string bien_contratado
-        string tipo
-        text detalle
-        timestamptz fecha_registro
-        date fecha_limite_respuesta
-        string estado
-        date fecha_respuesta
-        bigint id_usuario_atendio FK
-        timestamptz created_at
-        timestamptz updated_at
+    reclamaciones {
+        int id_reclamacion PK "Identificador de hoja"
+        int id_usuario_atendio FK "Operador que resolvió"
+        string codigo_correlativo UK "Formato LR-AAAA-NNNN"
+        string tipo_documento "CHECK: DNI, CE, RUC"
+        string numero_documento "Número identificatorio"
+        string consumidor_nombre "Nombre del consumidor"
+        string tipo "CHECK: queja o reclamo"
+        text detalle_reclamacion "Descripción de hechos"
+        text pedido_consumidor "Pretensión concreta"
+        timestamp fecha_limite_respuesta "Plazo legal 15 días hábiles"
+        string estado "CHECK: registrado, en_atencion, respondido"
+        text respuesta_proveedor "Resolución final"
+        timestamp created_at "timestamptz creación"
+        timestamp updated_at "timestamptz edición"
     }
 
-    CONSENTIMIENTOS_DATOS {
-        bigint id_consentimiento PK
-        bigint id_cliente FK
-        string correo
-        string finalidad
-        string version_politica
-        boolean aceptado
-        timestamptz aceptado_en
-        string direccion_ip
-        string user_agent
-        timestamptz created_at
-        timestamptz updated_at
+    registro_auditoria {
+        int id_evento PK "Identificador forense"
+        int id_usuario FK "Usuario que operó"
+        string entidad "Tabla afectada"
+        int id_registro "PK de la entidad"
+        string accion "creacion, actualizacion, cambio_estado"
+        text estado_previo "JSON snapshot previo"
+        string direccion_ip "IP origen de la petición"
+        timestamp fecha_evento "timestamptz inmutable"
     }
 
-    MENSAJES_CONTACTO {
-        bigint id_mensaje PK
-        string nombre
-        string correo
-        string telefono
-        string asunto
-        text mensaje
-        bigint id_consentimiento FK
-        timestamptz fecha_envio
-        timestamptz created_at
-        timestamptz updated_at
+    banners {
+        int id_banner PK "Identificador de banner"
+        string titulo "Título promocional"
+        string subtitulo "Texto descriptivo"
+        string url_imagen_desktop "Imagen escritorio"
+        string url_imagen_mobile "Imagen móvil"
+        string enlace_destino "URL de destino"
+        int orden "Orden en carrusel"
+        boolean activo "Flag de publicación"
+        timestamp created_at "timestamptz creación"
+        timestamp updated_at "timestamptz edición"
     }
 
-    BANNERS {
-        bigint id_banner PK
-        string titulo
-        string url_imagen
-        string enlace_destino
-        integer orden
-        boolean activo
-        bigint id_usuario FK
-        timestamptz created_at
-        timestamptz updated_at
-    }
-
-    CONTENIDO_INSTITUCIONAL {
-        bigint id_contenido PK
-        string clave UK
-        string titulo
-        text contenido
-        bigint id_usuario FK
-        timestamptz created_at
-        timestamptz updated_at
-    }
-
-    REGISTRO_AUDITORIA {
-        bigint id_evento PK
-        bigint id_usuario FK
-        string entidad
-        bigint id_registro
-        string accion
-        text estado_previo
-        string direccion_ip
-        timestamptz fecha_evento
+    contenidos_institucionales {
+        int id_contenido PK "Identificador de contenido"
+        string clave UK "Clave única mision, vision, politicas"
+        string titulo "Título institucional"
+        text contenido "Cuerpo formateado HTML/Markdown"
+        timestamp created_at "timestamptz creación"
+        timestamp updated_at "timestamptz edición"
     }
 ```
 
