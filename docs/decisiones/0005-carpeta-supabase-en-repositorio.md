@@ -1,32 +1,53 @@
 ---
-titulo: "ADR-0005: Mantener la carpeta supabase/ dentro del repositorio"
+titulo: "ADR-0005: Carpeta supabase/ presente en el repositorio sin uso en la aplicación"
 tipo: adr
-estado: vigente
-autor: "Ipolari2645"
-fecha: "2026-10-19"
-commit_auditado: "bd451e2"
+area: decisiones
+version: 1.0.0
+estado: borrador
+autor: Hans (Filam CentroPlas)
+fecha: 2026-10-19
+commit_auditado: 31b565d
 alcance:
   - supabase/
-  - config/database.php
+  - .gitignore
+  - PLAN_FASE_3.md
+requisitos: []
 ---
 
-## 1. Contexto
+# ADR-0005: Carpeta supabase/ presente en el repositorio sin uso en la aplicación
 
-El repositorio conserva en la raíz la carpeta `supabase/`. Su contenido verificado es únicamente `supabase/.temp/linked-project.json`, el archivo que genera la CLI de Supabase al vincular un proyecto (nombre del proyecto e identificadores de organización). No contiene migraciones, configuración de servicios ni semillas. `.gitignore` no la excluye.
+## Estado
 
-La base de datos del sistema es PostgreSQL gestionado con migraciones de Laravel: la conexión por defecto del entorno es `pgsql` (`.env.example:23`) y el esquema vive en `database/migrations/`. Los documentos de diseño descartan el uso de Supabase para almacenamiento: `docs/DDS_FilamCentroPlas_v1.4.md:103` (ADR-007) fija el almacenamiento local protegido en el VPS, y `PLAN_FASE_3.md:22` repite "sin S3/Supabase".
+`propuesto` — 2026-10-19. La decisión de conservar o retirar la carpeta no está confirmada por ninguna persona responsable; este ADR queda en `borrador` hasta que se confirme.
 
-## 2. Decisión
+## Contexto
 
-Mantener la carpeta `supabase/` versionada tal como está. No cumple ninguna función en la aplicación en ejecución, y todo cambio de esquema se gestiona exclusivamente en `database/migrations/`.
+En la raíz del repositorio recibido existe la carpeta `supabase/`. Su único contenido es `supabase/.temp/linked-project.json`: el archivo que genera la CLI de Supabase al vincular un proyecto, con la referencia del proyecto (`ref`), su nombre (`filam-centroplas`) y los identificadores de la organización. No hay migraciones, configuración de servicios ni semillas dentro de `supabase/`. `.gitignore` no la excluye. Con solo el contenido del zip no se puede saber si el archivo está versionado en Git; se comprueba con `git ls-files supabase`.
 
-## 3. Alternativas evaluadas
+El resto de la documentación descarta Supabase:
 
-- **Eliminar la carpeta o agregarla a `.gitignore`:** no adoptada por ahora; queda pendiente que el responsable del proyecto confirme que la CLI de Supabase ya no se usa para este proyecto.
+- `PLAN_FASE_3.md:22` fija el almacenamiento como "disco local protegido (sin S3/Supabase)".
+- `docs/DDS_FilamCentroPlas_v1.10.md:114` (ADR-007 del DDS, estado Aceptado) fija el almacenamiento local protegido en el VPS, sin servicios externos. Las versiones 1.3 y anteriores del DDS sí mencionaban Supabase Storage como opción.
 
-## 4. Consecuencias
+La base de datos de la aplicación es PostgreSQL gestionado con migraciones de Laravel: conexión `pgsql` (`.env.example:23`) y esquema en `database/migrations/`. Ningún archivo de `app/`, `config/` ni `routes/` hace referencia a Supabase.
 
-- **Positivas:** se conserva el vínculo con el proyecto de Supabase por si se retoma su uso.
-- **Negativas:** el repositorio expone los identificadores del proyecto y de la organización de Supabase contenidos en `linked-project.json`.
-- **Negativas:** la carpeta puede inducir a pensar que Supabase forma parte de la infraestructura, cuando los documentos de diseño lo descartan.
-- **Negativas:** debe respetarse la regla de no duplicar migraciones fuera de `database/migrations/`.
+## Decisión
+
+Pendiente. Se propone conservar el hecho verificado (la carpeta no cumple función en la aplicación) y que el responsable del proyecto elija una de las opciones de la tabla.
+
+## Alternativas evaluadas
+
+| Alternativa | Ventajas | Observaciones |
+|---|---|---|
+| Mantener la carpeta tal como está | No requiere ningún cambio | El repositorio expone la referencia y la organización del proyecto de Supabase; la carpeta puede hacer pensar que Supabase forma parte de la infraestructura |
+| Agregar `supabase/` a `.gitignore` | Evita que se vuelva a versionar | Si el archivo ya está versionado, hay que quitarlo del índice con `git rm --cached` además de ignorarlo |
+| Eliminar la carpeta | Deja el repositorio coherente con ADR-007 del DDS | Pierde el vínculo con el proyecto de Supabase si algún día se retoma su uso |
+
+Estas opciones son comparables desde el punto de vista técnico; el repositorio no registra cuál evaluó el equipo.
+
+## Consecuencias
+
+- **Si se mantiene:** la exposición de los identificadores del proyecto y de la organización continúa, y debe respetarse la regla de que todo cambio de esquema vive solo en `database/migrations/`.
+- **Si se ignora o elimina:** hay que verificar antes con el responsable del proyecto que la CLI de Supabase ya no se usa en ninguna máquina de desarrollo.
+- **Quién confirma:** ningún documento del repositorio nombra a la persona. `docs/README.md:43-49` atribuye la titularidad de la documentación a un "Responsable del proyecto" sin nombre, y `docs/README.md:7` y `docs/ESTANDAR_DOCUMENTACION.md:7` figuran a nombre de Hans (Filam CentroPlas). La asignación debe hacerla el equipo.
+- **Trabajo derivado:** registrar la confirmación en este ADR (estado `aceptado` o `reemplazado por`) y actualizar el apartado de ADR sin registrar en `docs/README.md:117`, que hoy menciona "Supabase en el repo".

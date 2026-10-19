@@ -1,35 +1,58 @@
 ---
-titulo: "ADR-0001: Serializar el correlativo de pedidos con pg_advisory_xact_lock(20261006)"
+titulo: "ADR-0001: Serializar los correlativos de pedidos y reclamaciones con pg_advisory_xact_lock"
 tipo: adr
+area: decisiones
+version: 1.0.0
 estado: vigente
-autor: "Ipolari2645"
-fecha: "2026-10-19"
-commit_auditado: "bd451e2"
+autor: Hans (Filam CentroPlas)
+fecha: 2026-10-19
+commit_auditado: 31b565d
 alcance:
   - app/Services/OrderService.php
   - app/Livewire/ReclamacionForm.php
+  - database/migrations/2026_10_06_100011_create_pedidos_table.php
+  - phpunit.xml
+  - config/app.php
+requisitos: []
 ---
 
-## 1. Contexto
+# ADR-0001: Serializar los correlativos de pedidos y reclamaciones con pg_advisory_xact_lock
 
-Cada pedido recibe un código correlativo anual (`PED-AAAA-NNNNN`) y de él se deriva el número del comprobante interno (`CI-AAAA-NNNNN`). El código se calcula leyendo el mayor correlativo del año y sumando uno. Sin serialización, dos pedidos concurrentes pueden leer el mismo máximo y generar el mismo código, lo que viola la unicidad de `pedidos.codigo_correlativo`.
+## Estado
 
-## 2. Decisión
+`aceptado` — 2026-10-19. Registro retroactivo de una decisión ya implementada en el código auditado.
 
-`OrderService::crear()` ejecuta todo su trabajo dentro de `DB::transaction()`. Dentro de esa transacción, `OrderService::siguienteCorrelativo()` ejecuta `SELECT pg_advisory_xact_lock(20261006)` mediante `DB::select()` solo cuando el driver de la conexión es `pgsql`. Después lee el mayor `codigo_correlativo` con prefijo `PED-AAAA-`, suma uno y rellena con ceros a 5 dígitos.
+## Contexto
 
-El número del comprobante no tiene su propio cálculo: `OrderService::crear()` lo obtiene reemplazando `PED-` por `CI-` en el código del pedido.
+Cada pedido recibe un código correlativo anual `PED-AAAA-NNNNN`; el número del comprobante interno se deriva de ese código (`CI-AAAA-NNNNN`). El código se calcula leyendo el mayor correlativo del año y sumando uno (`OrderService::siguienteCorrelativo()`, `app/Services/OrderService.php:62-78`). Sin serialización, dos transacciones concurrentes pueden leer el mismo máximo y calcular el mismo código.
 
-El mismo patrón se repite con la clave `20261007` para el correlativo del Libro de Reclamaciones (`ReclamacionForm`).
+La columna `pedidos.codigo_correlativo` tiene índice único (`database/migrations/2026_10_06_100011_create_pedidos_table.php:14`), de modo que un duplicado no se guardaría en silencio: la segunda transacción fallaría con una violación de unicidad.
 
-## 3. Alternativas evaluadas
+El Libro de Reclamaciones usa el mismo patrón con el formato `LR-AAAA-NNNN` (`ReclamacionForm::registrar()`, `app/Livewire/ReclamacionForm.php:79-93`).
 
-- **Secuencias de base de datos (`CREATE SEQUENCE`):** descartada porque una secuencia no revierte su incremento cuando la transacción hace rollback, lo que deja saltos en la numeración, y porque exigiría reiniciarla cada año.
-- **Bloqueo de tabla (`LOCK TABLE pedidos IN EXCLUSIVE MODE`):** descartada porque bloquearía también las lecturas concurrentes del panel administrativo y del área del cliente.
+## Decisión
 
-## 4. Consecuencias
+`OrderService::crear()` ejecuta todo su trabajo dentro de `DB::transaction()` (`app/Services/OrderService.php:20`). Dentro de esa transacción, `OrderService::siguienteCorrelativo()` ejecuta `SELECT pg_advisory_xact_lock(?)` con el valor `20261006` mediante `DB::select()` (`:68`), y solo cuando el driver de la conexión es `pgsql` (`:67`). A continuación lee el mayor `codigo_correlativo` con prefijo `PED-AAAA-`, suma uno y rellena con ceros a 5 dígitos (`:71-77`).
 
-- **Positivas:** el candado solo serializa a las transacciones que crean pedidos y se libera automáticamente al terminar la transacción (`xact`). Un rollback no consume número.
-- **Negativas:** la serialización existe únicamente en PostgreSQL; con otro driver el bloqueo se omite sin error y el riesgo de duplicados reaparece. Por eso la suite de pruebas usa PostgreSQL (`phpunit.xml`, `DB_CONNECTION`).
-- **Negativas:** las claves de bloqueo son constantes numéricas sin registro central (`20261006` pedidos, `20261007` reclamaciones); cualquier clave nueva debe documentarse aquí para evitar colisiones.
-- **Negativas:** el formato rellena a 5 dígitos y el máximo se toma como texto, por lo que el esquema soporta hasta 99999 pedidos por año.
+El número de comprobante no tiene cálculo propio: `OrderService::crear()` reemplaza `PED-` por `CI-` en el código del pedido (`:54`).
+
+`ReclamacionForm::registrar()` repite el patrón dentro de su propia transacción con la clave `20261007` (`app/Livewire/ReclamacionForm.php:80-81`) y un correlativo de 4 dígitos (`:84-88`).
+
+## Alternativas evaluadas
+
+El repositorio no contiene el acta de esta decisión. Las alternativas de la tabla son opciones técnicas comparables; los motivos son consecuencias verificables del comportamiento de PostgreSQL y de la estructura del código, no motivos declarados por el equipo. El responsable del proyecto debe confirmarlos o corregirlos.
+
+| Alternativa | Ventajas | Por qué no aplica |
+|---|---|---|
+| Secuencia de PostgreSQL (`CREATE SEQUENCE`) | No exige leer el máximo existente | Una secuencia no revierte su incremento cuando la transacción hace rollback, y no se reinicia sola cada año; el formato incluye el año |
+| `LOCK TABLE pedidos` | Simple de escribir | Bloquea la tabla completa para cualquier escritura concurrente, no solo para la generación del código |
+| Reintento ante violación de la restricción única | No necesita bloqueo | No está implementado: el código no captura la excepción de unicidad |
+
+## Consecuencias
+
+- **Positivas:** el candado solo serializa a las transacciones que generan un correlativo y se libera al terminar la transacción (`xact`). Un rollback no consume número.
+- **Negativas — dependencia del motor:** con un driver distinto de `pgsql` el bloqueo se omite sin error; la restricción única impediría guardar un duplicado, pero la segunda transacción fallaría. La suite de pruebas usa PostgreSQL (`phpunit.xml:26`).
+- **Negativas — año en UTC:** el año del prefijo sale de `now()->year` (`app/Services/OrderService.php:64`) y la zona horaria de la aplicación es `UTC` (`config/app.php:68`). Un pedido registrado entre las 19:00 y las 24:00 (hora de Lima) del 31 de diciembre recibiría el año siguiente. Es una deducción del código; ninguna prueba la ejercita.
+- **Negativas — capacidad:** el correlativo se rellena a 5 dígitos y se recupera con `substr(..., -5)` (`:75`); el esquema soporta hasta 99999 pedidos por año. El de reclamaciones soporta 9999 (`app/Livewire/ReclamacionForm.php:84`).
+- **Negativas — claves sin registro central:** `20261006` (pedidos) y `20261007` (reclamaciones) son constantes numéricas repetidas en el código. Toda clave nueva debe registrarse aquí para evitar colisiones.
+- **Sin pruebas de concurrencia:** `CartTest::test_confirmar_creates_order_with_frozen_prices_and_comprobante` cubre la creación del pedido (`tests/Feature/CartTest.php:41`), pero ninguna prueba ejerce dos transacciones simultáneas.
